@@ -70,7 +70,7 @@ Instance.new("UICorner", IncBtn).CornerRadius = UDim.new(0.2, 0)
 -- ==========================================
 local flying = false
 local flySpeed = 50
-local FlyVelocity, FlyGyro -- Dùng biến cục bộ để dễ quản lý
+local FlyVelocity, FlyGyro
 
 local function GetFlyVector(moveDir)
     if moveDir.Magnitude == 0 then return Vector3.zero end
@@ -87,7 +87,7 @@ local function GetFlyVector(moveDir)
 end
 
 -- ==========================================
--- XỬ LÝ BAY BẰNG VẬT LÝ (ĐỒNG BỘ VỚI SERVER)
+-- XỬ LÝ BAY BẰNG VẬT LÝ (ĐỒNG BỘ VỊ TRÍ SERVER)
 -- ==========================================
 local function stopFly()
     flying = false
@@ -99,29 +99,27 @@ local function stopFly()
         local root = char:FindFirstChild("HumanoidRootPart")
         local hum = char:FindFirstChildOfClass("Humanoid")
         
-        -- 1. Xóa các công cụ bay vật lý
         if root then
+            root.Anchored = false
             for _, v in pairs(root:GetChildren()) do
-                if v.Name == "FlyVelocity" or v.Name == "FlyGyro" then 
-                    v:Destroy() 
-                end
+                if v.Name == "FlyVelocity" or v.Name == "FlyGyro" then v:Destroy() end
             end
             
-            -- Xóa đà quán tính để không bị trượt khi tắt
+            -- Xóa đà quán tính chống trượt
             root.AssemblyLinearVelocity = Vector3.zero
             root.AssemblyAngularVelocity = Vector3.zero
         end
         
-        -- 2. Trả lại trạng thái bình thường
         if hum then 
             hum.PlatformStand = false
             hum:SetStateEnabled(Enum.HumanoidStateType.Swimming, true)
-            hum:ChangeState(Enum.HumanoidStateType.Freefall) -- Tránh trượt chân
+            hum:ChangeState(Enum.HumanoidStateType.Freefall)
         end
         
         task.defer(function()
             if root then
                 root.AssemblyLinearVelocity = Vector3.zero
+                root.AssemblyAngularVelocity = Vector3.zero
             end
         end)
     end
@@ -138,30 +136,29 @@ local function startFly()
     FlyBtn.Text = "FLY [BẬT]"
     FlyBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 40)
     
-    -- Dọn dẹp tàn dư cũ (nếu có)
     for _, v in pairs(root:GetChildren()) do
         if v.Name == "FlyVelocity" or v.Name == "FlyGyro" then v:Destroy() end
     end
     
-    -- Khóa bơi lội để có thể bay lên từ dưới nước
     hum:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
     hum.PlatformStand = true
     hum:ChangeState(Enum.HumanoidStateType.Physics)
 
-    -- SỬ DỤNG BODYVELOCITY ĐỂ ĐỒNG BỘ VỚI SERVER (Không dùng Anchor)
+    -- SỬ DỤNG VẬT LÝ ĐỂ BÁO VỊ TRÍ CHO MÁY CHỦ
     FlyVelocity = Instance.new("BodyVelocity")
     FlyVelocity.Name = "FlyVelocity"
-    FlyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge) -- Lực Vô Hạn để triệt tiêu trọng lực
+    FlyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
     FlyVelocity.Velocity = Vector3.zero
     FlyVelocity.Parent = root
 
-    -- Giữ hướng nhìn ổn định, không bị lật
     FlyGyro = Instance.new("BodyGyro")
     FlyGyro.Name = "FlyGyro"
     FlyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
     FlyGyro.P = 9e4
     FlyGyro.CFrame = root.CFrame
     FlyGyro.Parent = root
+    
+    root.Anchored = false -- TUYỆT ĐỐI KHÔNG ĐÓNG BĂNG
 
     task.spawn(function()
         while flying and char and root and root.Parent do
@@ -169,13 +166,11 @@ local function startFly()
             
             if hum then 
                 hum.PlatformStand = true 
-                -- Đảm bảo không bị ép về trạng thái bơi khi ở dưới nước
                 if hum:GetState() == Enum.HumanoidStateType.Swimming then
                     hum:ChangeState(Enum.HumanoidStateType.Physics)
                 end
             end
             
-            -- Xoay nhân vật theo Camera
             if FlyGyro and FlyGyro.Parent then
                 FlyGyro.CFrame = Camera.CFrame
             end
@@ -186,8 +181,7 @@ local function startFly()
                 if flyDir.Magnitude > 0 then
                     FlyVelocity.Velocity = flyDir * flySpeed
                 else
-                    -- Đứng im hoàn toàn trên không mà máy chủ vẫn nhận được
-                    FlyVelocity.Velocity = Vector3.zero
+                    FlyVelocity.Velocity = Vector3.zero -- Phanh gấp lại khi buông tay
                 end
             end
         end
