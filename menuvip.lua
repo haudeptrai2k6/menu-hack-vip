@@ -10,7 +10,7 @@ local Camera = Workspace.CurrentCamera
 -- GIAO DIỆN (UI) NÚT BAY & CHỈNH TỐC ĐỘ
 -- ==========================================
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "FlyScriptDeltaPro"
+ScreenGui.Name = "FlyScriptDeltaGod"
 pcall(function() ScreenGui.Parent = CoreGui end)
 
 local Frame = Instance.new("Frame")
@@ -44,15 +44,15 @@ DecBtn.TextColor3 = Color3.new(1, 1, 1)
 DecBtn.Parent = Frame
 Instance.new("UICorner", DecBtn).CornerRadius = UDim.new(0.2, 0)
 
--- CHUYỂN TEXTLABEL THÀNH TEXTBOX ĐỂ CÓ THỂ NHẬP SỐ THỦ CÔNG
+-- KHUNG NHẬP TỐC ĐỘ THỦ CÔNG
 local SpeedInput = Instance.new("TextBox")
 SpeedInput.Size = UDim2.new(0, 90, 0, 30)
 SpeedInput.Position = UDim2.new(0, 45, 0, 50)
-SpeedInput.Text = "1000" -- Tốc độ mặc định ban đầu
+SpeedInput.Text = "1000" -- Mặc định là 1000
 SpeedInput.Font = Enum.Font.GothamSemibold
 SpeedInput.TextSize = 14
 SpeedInput.TextColor3 = Color3.new(1, 1, 1)
-SpeedInput.BackgroundColor3 = Color3.fromRGB(45, 45, 45) -- Màu nền làm nổi bật ô nhập
+SpeedInput.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 SpeedInput.ClearTextOnFocus = false
 SpeedInput.Parent = Frame
 Instance.new("UICorner", SpeedInput).CornerRadius = UDim.new(0.2, 0)
@@ -69,43 +69,36 @@ IncBtn.Parent = Frame
 Instance.new("UICorner", IncBtn).CornerRadius = UDim.new(0.2, 0)
 
 -- ==========================================
--- THUẬT TOÁN TÍNH HƯỚNG BAY & VẬT LÝ NƯỚC
+-- THUẬT TOÁN ĐỌC JOYSTICK TRỰC TIẾP (FIX KẸT NƯỚC)
 -- ==========================================
 local flying = false
 local flySpeed = 1000
 local FlyVelocity, FlyGyro
 
-local function GetFlyVector(moveDir)
-    if moveDir.Magnitude == 0 then return Vector3.zero end
-    local camLook = Camera.CFrame.LookVector
-    local flatLook = Vector3.new(camLook.X, 0, camLook.Z)
-    if flatLook.Magnitude == 0 then flatLook = Vector3.new(0, 0, -1) else flatLook = flatLook.Unit end
-
-    local flatCamCFrame = CFrame.lookAt(Vector3.zero, flatLook)
-    local localJoystick = flatCamCFrame:VectorToObjectSpace(moveDir)
-    local flyVector = (Camera.CFrame.RightVector * localJoystick.X) + (Camera.CFrame.LookVector * -localJoystick.Z)
+-- Bỏ qua Humanoid, lấy hướng di chuyển từ Joystick của điện thoại hoặc phím PC
+local function GetFlyVector()
+    local moveVector = Vector3.zero
     
-    if flyVector.Magnitude > 0 then return flyVector.Unit end
+    pcall(function()
+        local playerModule = require(LocalPlayer.PlayerScripts:WaitForChild("PlayerModule"))
+        moveVector = playerModule:GetControls():GetMoveVector()
+    end)
+    
+    if moveVector.Magnitude > 0 then
+        local camLook = Camera.CFrame.LookVector
+        local camRight = Camera.CFrame.RightVector
+        
+        -- Dựa vào góc nhìn Camera để tính toán
+        local flyDir = (camRight * moveVector.X) + (camLook * -moveVector.Z)
+        if flyDir.Magnitude > 0 then
+            return flyDir.Unit
+        end
+    end
     return Vector3.zero
 end
 
--- Hàm triệt tiêu trọng lượng để nước không cản được nhân vật
-local function FixWaterPhysics(char, enable)
-    for _, part in pairs(char:GetDescendants()) do
-        if part:IsA("BasePart") then
-            if enable then
-                -- Ép mật độ về 0.0001 (không trọng lượng -> nước không đẩy lên đẩy xuống)
-                part.CustomPhysicalProperties = PhysicalProperties.new(0.0001, 0, 0, 0, 0)
-            else
-                -- Trả về bình thường
-                part.CustomPhysicalProperties = nil
-            end
-        end
-    end
-end
-
 -- ==========================================
--- XỬ LÝ BAY BẰNG VẬT LÝ (ĐỒNG BỘ MÁY CHỦ)
+-- XỬ LÝ BAY BẰNG VẬT LÝ
 -- ==========================================
 local function stopFly()
     flying = false
@@ -114,8 +107,6 @@ local function stopFly()
     
     local char = LocalPlayer.Character
     if char then
-        FixWaterPhysics(char, false) -- Phục hồi trọng lượng
-        
         local root = char:FindFirstChild("HumanoidRootPart")
         local hum = char:FindFirstChildOfClass("Humanoid")
         
@@ -158,14 +149,13 @@ local function startFly()
         if v.Name == "FlyVelocity" or v.Name == "FlyGyro" then v:Destroy() end
     end
     
-    FixWaterPhysics(char, true) -- Loại bỏ lực đẩy của nước
-    
     hum:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
     hum.PlatformStand = true
     hum:ChangeState(Enum.HumanoidStateType.Physics)
 
     FlyVelocity = Instance.new("BodyVelocity")
     FlyVelocity.Name = "FlyVelocity"
+    -- Dùng lực tuyệt đối math.huge để đâm xuyên mọi thứ (kể cả lực cản của nước)
     FlyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
     FlyVelocity.Velocity = Vector3.zero
     FlyVelocity.Parent = root
@@ -194,7 +184,8 @@ local function startFly()
                 FlyGyro.CFrame = Camera.CFrame
             end
 
-            local flyDir = GetFlyVector(hum.MoveDirection)
+            -- Áp dụng hướng di chuyển đọc từ hàm MỚI
+            local flyDir = GetFlyVector()
 
             if FlyVelocity and FlyVelocity.Parent then
                 if flyDir.Magnitude > 0 then
@@ -209,23 +200,23 @@ local function startFly()
 end
 
 -- ==========================================
--- SỰ KIỆN NÚT BẤM & NHẬP TỐC ĐỘ
+-- SỰ KIỆN NÚT BẤM & NHẬP SỐ
 -- ==========================================
 FlyBtn.MouseButton1Click:Connect(function()
     if flying then stopFly() else startFly() end
 end)
 
--- SỰ KIỆN KHI NHẬP TỐC ĐỘ THỦ CÔNG
+-- Cập nhật tốc độ khi bạn bấm vào nhập số rồi Enter hoặc ấn ra ngoài
 SpeedInput.FocusLost:Connect(function()
     local newSpeed = tonumber(SpeedInput.Text)
     if newSpeed then
-        flySpeed = newSpeed -- Nếu nhập đúng số, cập nhật tốc độ
+        flySpeed = newSpeed 
     else
-        SpeedInput.Text = tostring(flySpeed) -- Nếu nhập chữ cái linh tinh, hoàn tác lại số cũ
+        SpeedInput.Text = tostring(flySpeed) -- Gõ linh tinh thì trả về số cũ
     end
 end)
 
--- Nút Tăng/Giảm tốc độ (Mỗi lần +- 50 cho nhanh)
+-- Nút + / - (mỗi lần tăng/giảm 50)
 IncBtn.MouseButton1Click:Connect(function()
     flySpeed = flySpeed + 50
     SpeedInput.Text = tostring(flySpeed)
