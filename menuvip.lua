@@ -10,7 +10,7 @@ local Camera = Workspace.CurrentCamera
 -- GIAO DIỆN (UI) NÚT BAY & CHỈNH TỐC ĐỘ
 -- ==========================================
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "FlyScriptDeltaPerfect"
+ScreenGui.Name = "FlyScriptDeltaSync"
 pcall(function() ScreenGui.Parent = CoreGui end)
 
 local Frame = Instance.new("Frame")
@@ -55,9 +55,8 @@ SpeedLabel.BackgroundTransparency = 1
 SpeedLabel.Parent = Frame
 
 local IncBtn = Instance.new("TextButton")
-IncBtn.Size = UDim2.new(0, 140, 0, 50)
-IncBtn.Position = UDim2.new(0, 140, 0, 50)
 IncBtn.Size = UDim2.new(0, 30, 0, 30)
+IncBtn.Position = UDim2.new(0, 140, 0, 50)
 IncBtn.Text = "+"
 IncBtn.Font = Enum.Font.GothamBold
 IncBtn.TextSize = 16
@@ -71,6 +70,7 @@ Instance.new("UICorner", IncBtn).CornerRadius = UDim.new(0.2, 0)
 -- ==========================================
 local flying = false
 local flySpeed = 50
+local FlyVelocity, FlyGyro -- Dùng biến cục bộ để dễ quản lý
 
 local function GetFlyVector(moveDir)
     if moveDir.Magnitude == 0 then return Vector3.zero end
@@ -87,7 +87,7 @@ local function GetFlyVector(moveDir)
 end
 
 -- ==========================================
--- XỬ LÝ BAY (SỬA LỖI TỰ DI CHUYỂN KHI TẮT)
+-- XỬ LÝ BAY BẰNG VẬT LÝ (ĐỒNG BỘ VỚI SERVER)
 -- ==========================================
 local function stopFly()
     flying = false
@@ -99,25 +99,29 @@ local function stopFly()
         local root = char:FindFirstChild("HumanoidRootPart")
         local hum = char:FindFirstChildOfClass("Humanoid")
         
+        -- 1. Xóa các công cụ bay vật lý
         if root then
-            -- 1. Triệt tiêu mọi lực vật lý dư thừa
+            for _, v in pairs(root:GetChildren()) do
+                if v.Name == "FlyVelocity" or v.Name == "FlyGyro" then 
+                    v:Destroy() 
+                end
+            end
+            
+            -- Xóa đà quán tính để không bị trượt khi tắt
             root.AssemblyLinearVelocity = Vector3.zero
             root.AssemblyAngularVelocity = Vector3.zero
-            root.Anchored = false
         end
         
+        -- 2. Trả lại trạng thái bình thường
         if hum then 
             hum.PlatformStand = false
             hum:SetStateEnabled(Enum.HumanoidStateType.Swimming, true)
-            -- 2. Chuyển sang trạng thái Rơi tự do (Freefall) để ngừng trượt
-            hum:ChangeState(Enum.HumanoidStateType.Freefall)
+            hum:ChangeState(Enum.HumanoidStateType.Freefall) -- Tránh trượt chân
         end
         
-        -- 3. Xóa lực lần nữa sau 1 frame để đảm bảo không bị trượt
         task.defer(function()
             if root then
                 root.AssemblyLinearVelocity = Vector3.zero
-                root.AssemblyAngularVelocity = Vector3.zero
             end
         end)
     end
@@ -134,28 +138,57 @@ local function startFly()
     FlyBtn.Text = "FLY [BẬT]"
     FlyBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 40)
     
+    -- Dọn dẹp tàn dư cũ (nếu có)
+    for _, v in pairs(root:GetChildren()) do
+        if v.Name == "FlyVelocity" or v.Name == "FlyGyro" then v:Destroy() end
+    end
+    
+    -- Khóa bơi lội để có thể bay lên từ dưới nước
     hum:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
+    hum.PlatformStand = true
     hum:ChangeState(Enum.HumanoidStateType.Physics)
+
+    -- SỬ DỤNG BODYVELOCITY ĐỂ ĐỒNG BỘ VỚI SERVER (Không dùng Anchor)
+    FlyVelocity = Instance.new("BodyVelocity")
+    FlyVelocity.Name = "FlyVelocity"
+    FlyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge) -- Lực Vô Hạn để triệt tiêu trọng lực
+    FlyVelocity.Velocity = Vector3.zero
+    FlyVelocity.Parent = root
+
+    -- Giữ hướng nhìn ổn định, không bị lật
+    FlyGyro = Instance.new("BodyGyro")
+    FlyGyro.Name = "FlyGyro"
+    FlyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+    FlyGyro.P = 9e4
+    FlyGyro.CFrame = root.CFrame
+    FlyGyro.Parent = root
 
     task.spawn(function()
         while flying and char and root and root.Parent do
-            local dt = RunService.RenderStepped:Wait()
+            RunService.RenderStepped:Wait()
             
-            if hum then hum.PlatformStand = true end
+            if hum then 
+                hum.PlatformStand = true 
+                -- Đảm bảo không bị ép về trạng thái bơi khi ở dưới nước
+                if hum:GetState() == Enum.HumanoidStateType.Swimming then
+                    hum:ChangeState(Enum.HumanoidStateType.Physics)
+                end
+            end
             
-            -- ĐÓNG BĂNG NHÂN VẬT ĐỂ CHỐNG RƠI / TRÔI
-            root.Anchored = true 
+            -- Xoay nhân vật theo Camera
+            if FlyGyro and FlyGyro.Parent then
+                FlyGyro.CFrame = Camera.CFrame
+            end
 
             local flyDir = GetFlyVector(hum.MoveDirection)
-            local targetRotation = Camera.CFrame.Rotation
 
-            if flyDir.Magnitude > 0 then
-                -- Khi có lệnh di chuyển -> Cập nhật vị trí mới
-                local newPos = root.Position + (flyDir * flySpeed * dt)
-                root.CFrame = CFrame.new(newPos) * targetRotation
-            else
-                -- Khi buông tay -> Đứng yên tại chỗ, chỉ xoay camera
-                root.CFrame = CFrame.new(root.Position) * targetRotation
+            if FlyVelocity and FlyVelocity.Parent then
+                if flyDir.Magnitude > 0 then
+                    FlyVelocity.Velocity = flyDir * flySpeed
+                else
+                    -- Đứng im hoàn toàn trên không mà máy chủ vẫn nhận được
+                    FlyVelocity.Velocity = Vector3.zero
+                end
             end
         end
         stopFly()
