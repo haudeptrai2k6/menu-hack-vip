@@ -115,7 +115,7 @@ Instance.new("UICorner", DecBtn).CornerRadius = UDim.new(0.2, 0)
 local SpeedInput = Instance.new("TextBox")
 SpeedInput.Size = UDim2.new(0, 90, 0, 30)
 SpeedInput.Position = UDim2.new(0, 45, 0, 50)
-SpeedInput.Text = "1000"
+SpeedInput.Text = "100"
 SpeedInput.Font = Enum.Font.GothamSemibold
 SpeedInput.TextSize = 14
 SpeedInput.TextColor3 = Color3.new(1, 1, 1)
@@ -139,7 +139,7 @@ Instance.new("UICorner", IncBtn).CornerRadius = UDim.new(0.2, 0)
 -- THUẬT TOÁN ĐỌC JOYSTICK / BÀN PHÍM
 -- ==========================================
 local flying = false
-local flySpeed = 1000
+local flySpeed = 100
 local flyConnection = nil
 
 local function GetFlyVector()
