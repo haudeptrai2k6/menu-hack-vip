@@ -31,23 +31,73 @@ if not ok or not ScreenGui.Parent then
 end
 
 local Frame = Instance.new("Frame")
-Frame.Size = UDim2.new(0, 180, 0, 90)
+Frame.Size = UDim2.new(0, 180, 0, 118)
 Frame.Position = UDim2.new(0.1, 0, 0.2, 0)
 Frame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 Frame.Active = true
 Frame.Draggable = true
 Frame.Parent = ScreenGui
-Instance.new("UICorner", Frame).CornerRadius = UDim.new(0.15, 0)
+Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 8)
+
+-- Thanh tiêu đề chứa nút Thu nhỏ & Xoá
+local TitleBar = Instance.new("Frame")
+TitleBar.Size = UDim2.new(1, 0, 0, 28)
+TitleBar.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+TitleBar.BorderSizePixel = 0
+TitleBar.Parent = Frame
+Instance.new("UICorner", TitleBar).CornerRadius = UDim.new(0, 8)
+
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Size = UDim2.new(1, -60, 1, 0)
+TitleLabel.Position = UDim2.new(0, 10, 0, 0)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Text = "FLY MENU"
+TitleLabel.Font = Enum.Font.GothamBold
+TitleLabel.TextSize = 12
+TitleLabel.TextColor3 = Color3.new(1, 1, 1)
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+TitleLabel.Parent = TitleBar
+
+-- Nút Thu nhỏ [-]
+local MinBtn = Instance.new("TextButton")
+MinBtn.Size = UDim2.new(0, 22, 0, 20)
+MinBtn.Position = UDim2.new(1, -50, 0, 4)
+MinBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+MinBtn.Text = "-"
+MinBtn.Font = Enum.Font.GothamBold
+MinBtn.TextSize = 14
+MinBtn.TextColor3 = Color3.new(1, 1, 1)
+MinBtn.Parent = TitleBar
+Instance.new("UICorner", MinBtn).CornerRadius = UDim.new(0, 4)
+
+-- Nút Xoá Menu [X]
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.new(0, 22, 0, 20)
+CloseBtn.Position = UDim2.new(1, -25, 0, 4)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(200, 45, 45)
+CloseBtn.Text = "X"
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.TextSize = 12
+CloseBtn.TextColor3 = Color3.new(1, 1, 1)
+CloseBtn.Parent = TitleBar
+Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 4)
+
+-- Khung chứa các nút điều khiển (ẩn đi khi thu nhỏ)
+local ContentFrame = Instance.new("Frame")
+ContentFrame.Size = UDim2.new(1, 0, 1, -28)
+ContentFrame.Position = UDim2.new(0, 0, 0, 28)
+ContentFrame.BackgroundTransparency = 1
+ContentFrame.Parent = Frame
 
 local FlyBtn = Instance.new("TextButton")
 FlyBtn.Size = UDim2.new(1, -20, 0, 35)
-FlyBtn.Position = UDim2.new(0, 10, 0, 10)
+FlyBtn.Position = UDim2.new(0, 10, 0, 8)
 FlyBtn.Text = "FLY [TẮT]"
 FlyBtn.Font = Enum.Font.GothamBold
 FlyBtn.TextSize = 14
 FlyBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
 FlyBtn.TextColor3 = Color3.new(1, 1, 1)
-FlyBtn.Parent = Frame
+FlyBtn.Parent = ContentFrame
 Instance.new("UICorner", FlyBtn).CornerRadius = UDim.new(0.2, 0)
 
 local DecBtn = Instance.new("TextButton")
@@ -58,20 +108,20 @@ DecBtn.Font = Enum.Font.GothamBold
 DecBtn.TextSize = 16
 DecBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
 DecBtn.TextColor3 = Color3.new(1, 1, 1)
-DecBtn.Parent = Frame
+DecBtn.Parent = ContentFrame
 Instance.new("UICorner", DecBtn).CornerRadius = UDim.new(0.2, 0)
 
 -- KHUNG NHẬP TỐC ĐỘ THỦ CÔNG
 local SpeedInput = Instance.new("TextBox")
 SpeedInput.Size = UDim2.new(0, 90, 0, 30)
 SpeedInput.Position = UDim2.new(0, 45, 0, 50)
-SpeedInput.Text = "100"
+SpeedInput.Text = "1000"
 SpeedInput.Font = Enum.Font.GothamSemibold
 SpeedInput.TextSize = 14
 SpeedInput.TextColor3 = Color3.new(1, 1, 1)
 SpeedInput.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 SpeedInput.ClearTextOnFocus = false
-SpeedInput.Parent = Frame
+SpeedInput.Parent = ContentFrame
 Instance.new("UICorner", SpeedInput).CornerRadius = UDim.new(0.2, 0)
 
 local IncBtn = Instance.new("TextButton")
@@ -82,14 +132,14 @@ IncBtn.Font = Enum.Font.GothamBold
 IncBtn.TextSize = 16
 IncBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
 IncBtn.TextColor3 = Color3.new(1, 1, 1)
-IncBtn.Parent = Frame
+IncBtn.Parent = ContentFrame
 Instance.new("UICorner", IncBtn).CornerRadius = UDim.new(0.2, 0)
 
 -- ==========================================
 -- THUẬT TOÁN ĐỌC JOYSTICK / BÀN PHÍM
 -- ==========================================
 local flying = false
-local flySpeed = 100
+local flySpeed = 1000
 local flyConnection = nil
 
 local function GetFlyVector()
@@ -132,8 +182,10 @@ end
 -- ==========================================
 local function stopFly()
     flying = false
-    FlyBtn.Text = "FLY [TẮT]"
-    FlyBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+    if FlyBtn and FlyBtn.Parent then
+        FlyBtn.Text = "FLY [TẮT]"
+        FlyBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+    end
 
     if flyConnection then
         flyConnection:Disconnect()
@@ -236,7 +288,7 @@ local function startFly()
 end
 
 -- ==========================================
--- SỰ KIỆN UI & TỐC ĐỘ
+-- SỰ KIỆN UI, THU NHỎ, XOÁ & TỐC ĐỘ
 -- ==========================================
 FlyBtn.MouseButton1Click:Connect(function()
     if flying then
@@ -264,6 +316,27 @@ end)
 DecBtn.MouseButton1Click:Connect(function()
     flySpeed = math.max(flySpeed - 50, 10)
     SpeedInput.Text = tostring(flySpeed)
+end)
+
+-- Sự kiện Thu nhỏ / Mở rộng Menu [-]
+local isMinimized = false
+MinBtn.MouseButton1Click:Connect(function()
+    isMinimized = not isMinimized
+    if isMinimized then
+        ContentFrame.Visible = false
+        Frame.Size = UDim2.new(0, 180, 0, 28)
+        MinBtn.Text = "+"
+    else
+        ContentFrame.Visible = true
+        Frame.Size = UDim2.new(0, 180, 0, 118)
+        MinBtn.Text = "-"
+    end
+end)
+
+-- Sự kiện Xoá hẳn Menu [X]
+CloseBtn.MouseButton1Click:Connect(function()
+    stopFly()
+    ScreenGui:Destroy()
 end)
 
 LocalPlayer.CharacterAdded:Connect(function()
