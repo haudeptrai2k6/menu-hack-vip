@@ -4,14 +4,31 @@ local CoreGui = game:GetService("CoreGui")
 local Workspace = game:GetService("Workspace")
 
 local LocalPlayer = Players.LocalPlayer
-local Camera = Workspace.CurrentCamera
+
+-- Xóa UI cũ nếu chạy lại script nhiều lần
+local guiParent = (gethui and gethui()) or CoreGui
+pcall(function()
+    if guiParent:FindFirstChild("FlyScriptDeltaGodPro") then
+        guiParent.FlyScriptDeltaGodPro:Destroy()
+    end
+    if LocalPlayer:FindFirstChild("PlayerGui") and LocalPlayer.PlayerGui:FindFirstChild("FlyScriptDeltaGodPro") then
+        LocalPlayer.PlayerGui.FlyScriptDeltaGodPro:Destroy()
+    end
+end)
 
 -- ==========================================
 -- GIAO DIỆN (UI) NÚT BAY & CHỈNH TỐC ĐỘ
 -- ==========================================
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "FlyScriptDeltaGodPro"
-pcall(function() ScreenGui.Parent = CoreGui end)
+ScreenGui.ResetOnSpawn = false
+
+local ok = pcall(function()
+    ScreenGui.Parent = guiParent
+end)
+if not ok or not ScreenGui.Parent then
+    ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+end
 
 local Frame = Instance.new("Frame")
 Frame.Size = UDim2.new(0, 180, 0, 90)
@@ -48,7 +65,7 @@ Instance.new("UICorner", DecBtn).CornerRadius = UDim.new(0.2, 0)
 local SpeedInput = Instance.new("TextBox")
 SpeedInput.Size = UDim2.new(0, 90, 0, 30)
 SpeedInput.Position = UDim2.new(0, 45, 0, 50)
-SpeedInput.Text = "1000"
+SpeedInput.Text = "100"
 SpeedInput.Font = Enum.Font.GothamSemibold
 SpeedInput.TextSize = 14
 SpeedInput.TextColor3 = Color3.new(1, 1, 1)
@@ -72,29 +89,40 @@ Instance.new("UICorner", IncBtn).CornerRadius = UDim.new(0.2, 0)
 -- THUẬT TOÁN ĐỌC JOYSTICK / BÀN PHÍM
 -- ==========================================
 local flying = false
-local flySpeed = 1000
+local flySpeed = 100
 local flyConnection = nil
 
 local function GetFlyVector()
-    local moveVector = Vector3.zero
-    pcall(function()
-        local playerModule = require(LocalPlayer.PlayerScripts:WaitForChild("PlayerModule"))
-        moveVector = playerModule:GetControls():GetMoveVector()
-    end)
-    
-    if moveVector.Magnitude == 0 then
-        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if hum then moveVector = hum.MoveDirection end
+    local char = LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    local cam = Workspace.CurrentCamera
+    if not hum or not cam then return Vector3.zero end
+
+    local moveDir = hum.MoveDirection
+    if moveDir.Magnitude == 0 then
+        return Vector3.zero
     end
-    
-    if moveVector.Magnitude > 0 then
-        local camLook = Camera.CFrame.LookVector
-        local camRight = Camera.CFrame.RightVector
-        
-        local flyDir = (camRight * moveVector.X) + (camLook * -moveVector.Z)
-        if flyDir.Magnitude > 0 then
-            return flyDir.Unit
-        end
+
+    local camCF = cam.CFrame
+    local flatLook = Vector3.new(camCF.LookVector.X, 0, camCF.LookVector.Z)
+    local flatRight = Vector3.new(camCF.RightVector.X, 0, camCF.RightVector.Z)
+
+    if flatLook.Magnitude > 0.01 then
+        flatLook = flatLook.Unit
+    else
+        flatLook = Vector3.new(camCF.UpVector.X, 0, camCF.UpVector.Z).Unit
+    end
+
+    if flatRight.Magnitude > 0.01 then
+        flatRight = flatRight.Unit
+    end
+
+    local forwardInput = moveDir:Dot(flatLook)
+    local rightInput = moveDir:Dot(flatRight)
+
+    local flyDir = (camCF.LookVector * forwardInput) + (camCF.RightVector * rightInput)
+    if flyDir.Magnitude > 0 then
+        return flyDir.Unit
     end
     return Vector3.zero
 end
@@ -106,7 +134,7 @@ local function stopFly()
     flying = false
     FlyBtn.Text = "FLY [TẮT]"
     FlyBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
-    
+
     if flyConnection then
         flyConnection:Disconnect()
         flyConnection = nil
@@ -116,7 +144,7 @@ local function stopFly()
     if char then
         local root = char:FindFirstChild("HumanoidRootPart")
         local hum = char:FindFirstChildOfClass("Humanoid")
-        
+
         if root then
             for _, v in pairs(root:GetChildren()) do
                 if v.Name == "FlyAttachment" or v.Name == "FlyLinearVelocity" or v.Name == "FlyAlignOrientation" or v.Name == "FlyVelocity" or v.Name == "FlyGyro" then
@@ -126,8 +154,8 @@ local function stopFly()
             root.AssemblyLinearVelocity = Vector3.zero
             root.AssemblyAngularVelocity = Vector3.zero
         end
-        
-        if hum then 
+
+        if hum then
             hum.PlatformStand = false
             hum:SetStateEnabled(Enum.HumanoidStateType.Swimming, true)
             hum:SetStateEnabled(Enum.HumanoidStateType.Climbing, true)
@@ -146,20 +174,20 @@ local function startFly()
     flying = true
     FlyBtn.Text = "FLY [BẬT]"
     FlyBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 40)
-    
+
     -- Xóa các mover cũ
     for _, v in pairs(root:GetChildren()) do
         if v.Name == "FlyAttachment" or v.Name == "FlyLinearVelocity" or v.Name == "FlyAlignOrientation" or v.Name == "FlyVelocity" or v.Name == "FlyGyro" then
             v:Destroy()
         end
     end
-    
-    -- Tắt trạng thái bơi & leo để ngắt triệt để xung đột khi xuống nước
+
+    -- Tắt trạng thái bơi & leo để ngắt xung đột khi xuống nước
     hum:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
     hum:SetStateEnabled(Enum.HumanoidStateType.Climbing, false)
     hum.PlatformStand = true
 
-    -- Khởi tạo Attachment & LinearVelocity (Bộ di chuyển siêu mượt)
+    -- Khởi tạo Attachment & LinearVelocity
     local att = Instance.new("Attachment")
     att.Name = "FlyAttachment"
     att.Parent = root
@@ -167,7 +195,7 @@ local function startFly()
     local lv = Instance.new("LinearVelocity")
     lv.Name = "FlyLinearVelocity"
     lv.Attachment0 = att
-    lv.MaxForce = 1e9 -- Lực cực đại đẩy bật khỏi mặt nước
+    lv.MaxForce = 1e9
     lv.VelocityConstraintMode = Enum.VelocityConstraintMode.Vector
     lv.RelativeTo = Enum.ActuatorRelativeTo.World
     lv.VectorVelocity = Vector3.zero
@@ -178,19 +206,25 @@ local function startFly()
     ao.Attachment0 = att
     ao.Mode = Enum.OrientationAlignmentMode.OneAttachment
     ao.MaxTorque = 1e9
-    ao.Responsiveness = 200 -- Xoay góc nhìn mượt mà, không rung giật
-    ao.CFrame = Camera.CFrame
+    ao.Responsiveness = 200
+    ao.CFrame = Workspace.CurrentCamera.CFrame
     ao.Parent = root
 
-    -- Chạy theo nhịp PreSimulation (Heartbeat vật lý) để không bị giật hình
-    flyConnection = RunService.PreSimulation:Connect(function()
+    if flyConnection then
+        flyConnection:Disconnect()
+    end
+
+    flyConnection = RunService.Heartbeat:Connect(function()
         if not flying or not char or not root or not root.Parent then
             stopFly()
             return
         end
 
+        local cam = Workspace.CurrentCamera
         hum.PlatformStand = true
-        ao.CFrame = Camera.CFrame
+        if cam then
+            ao.CFrame = cam.CFrame
+        end
 
         local flyDir = GetFlyVector()
         if flyDir.Magnitude > 0 then
@@ -205,13 +239,18 @@ end
 -- SỰ KIỆN UI & TỐC ĐỘ
 -- ==========================================
 FlyBtn.MouseButton1Click:Connect(function()
-    if flying then stopFly() else startFly() end
+    if flying then
+        stopFly()
+    else
+        startFly()
+    end
 end)
 
 SpeedInput.FocusLost:Connect(function()
     local newSpeed = tonumber(SpeedInput.Text)
     if newSpeed then
-        flySpeed = newSpeed 
+        flySpeed = math.max(newSpeed, 1)
+        SpeedInput.Text = tostring(flySpeed)
     else
         SpeedInput.Text = tostring(flySpeed)
     end
@@ -227,4 +266,6 @@ DecBtn.MouseButton1Click:Connect(function()
     SpeedInput.Text = tostring(flySpeed)
 end)
 
-LocalPlayer.CharacterAdded:Connect(function() stopFly() end)
+LocalPlayer.CharacterAdded:Connect(function()
+    stopFly()
+end)
